@@ -82,3 +82,29 @@ int protocol_pack_task(uint8_t *buf, task_type_t type, const char *args,
 
     return off + args_len;
 }
+
+int protocol_pack_result(uint8_t *buf, task_type_t type, int32_t status,
+                         const uint8_t *data, uint32_t data_len) {
+    // Pack MSG_RESULT body
+
+    uint32_t btype = htonl((uint32_t)type);
+    uint32_t bstatus = htonl((uint32_t)status);
+    uint32_t bdata_len = htonl(data_len);
+
+    size_t off = 0;
+    memcpy(buf + off, &btype, 4);
+    off += 4;
+    memcpy(buf + off, &bstatus, 4);
+    off += 4;
+    memcpy(buf + off, &bdata_len, 4);
+    off += 4;
+    memcpy(buf + off, data, data_len);
+
+    LOG_DEBUG("pack_result: type=%s(%d) status=%d data_len=%u "
+              "first4=%02x%02x%02x%02x",
+              task_type_str(type), (int)type, status, data_len,
+              data_len > 0 ? data[0] : 0, data_len > 1 ? data[1] : 0,
+              data_len > 2 ? data[2] : 0, data_len > 3 ? data[3] : 0);
+
+    return off + data_len;
+}
