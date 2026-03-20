@@ -57,7 +57,8 @@ int protocol_pack_checkin(uint8_t *buf, uint64_t session_id,
 
 // Pack MSG_CHECKIN_ACK body: task_count(4B).
 // Server sends this in response to a checkin, followed by
-// task_count individual MSG_TASK messages.
+// task_count(example: 3) individual MSG_TASK messages.
+// Tells implant how many MSG_TASK messages to expect next. 
 int protocol_pack_checkin_ack(uint8_t *buf, uint32_t task_count);
 
 // Pack MSG_TASK body: task_type(4B) + args_len(4B) + args.
