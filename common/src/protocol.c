@@ -1,6 +1,10 @@
 #include "protocol.h"
 #include "logging.h"
 
+#include <arpa/inet.h>
+#include <stdio.h>
+#include <string.h>
+
 void recv_buf_reset(recv_buf_t *rbuf) {
     rbuf->len = 0;
 }
@@ -16,7 +20,7 @@ int protocol_pack_header(uint8_t *buf, msg_type_t type, uint32_t body_len) {
     memcpy(buf + 4, &mtype, 4);
     memcpy(buf + 8, &blen, 4);
 
-    LOG_DEBUG("Pack_header: type=%s(%d) body_len=%u", msg_type_str(type),
+    LOG_DEBUG("pack_header: type=%s(%d), body_len=%u", msg_type_str(type),
               (int)type, body_len);
 
     return NIGHTFALL_HDR_SIZE;
@@ -43,7 +47,7 @@ int protocol_pack_checkin(uint8_t *buf, uint64_t session_id,
     off += 4;
     memcpy(buf + off, hostname, hostname_len);
 
-    LOG_DEBUG("Pack_checkin: session_id=%llu, hostname_len=%u, hostname=%s",
+    LOG_DEBUG("pack_checkin: session_id=%llu, hostname_len=%u, hostname=%s",
               (unsigned long long)session_id, hostname_len, hostname);
 
     return off + hostname_len;
@@ -58,7 +62,7 @@ int protocol_pack_checkin_ack(uint8_t *buf, uint32_t task_count) {
     memcpy(buf + off, &tcount, 4);
     off += 4;
 
-    LOG_DEBUG("Pack_checkin_ack: Task_count=%u", task_count);
+    LOG_DEBUG("pack_checkin_ack: Task_count=%u", task_count);
 
     return off;
 }
@@ -77,8 +81,8 @@ int protocol_pack_task(uint8_t *buf, task_type_t type, const char *args,
     off += 4;
     memcpy(buf + off, args, args_len);
 
-    LOG_DEBUG("Pack_task: type=%s(%d) args_len=%u args=%s", task_type_str(type),
-              (int)type, args_len, args);
+    LOG_DEBUG("pack_task: type=%s(%d), args_len=%u, args=%s",
+              task_type_str(type), (int)type, args_len, args);
 
     return off + args_len;
 }
@@ -100,7 +104,7 @@ int protocol_pack_result(uint8_t *buf, task_type_t type, int32_t status,
     off += 4;
     memcpy(buf + off, data, data_len);
 
-    LOG_DEBUG("Pack_result: type=%s(%d) status=%d data_len=%u "
+    LOG_DEBUG("pack_result: type=%s(%d), status=%d, data_len=%u "
               "first4=%02x%02x%02x%02x",
               task_type_str(type), (int)type, status, data_len,
               data_len > 0 ? data[0] : 0, data_len > 1 ? data[1] : 0,
@@ -126,12 +130,13 @@ int protocol_unpack_header(const uint8_t *buf, msg_header_t *hdr) {
     hdr->msg_type = ntohl(hdr->msg_type);
     hdr->body_len = ntohl(hdr->body_len);
 
-    LOG_DEBUG("Unpack_header: magic=0x%08X type=%s(%d) body_len=%u", hdr->magic,
-              msg_type_str(hdr->msg_type), (int)hdr->msg_type, hdr->body_len);
+    LOG_DEBUG("unpack_header: magic=0x%08X, type=%s(%d), body_len=%u",
+              hdr->magic, msg_type_str(hdr->msg_type), (int)hdr->msg_type,
+              hdr->body_len);
 
     if (hdr->magic != NIGHTFALL_MAGIC) {
-        LOG_ERROR("Magic mismatch: expected=0x%08X got=0x%08X", NIGHTFALL_MAGIC,
-                  hdr->magic);
+        LOG_ERROR("magic mismatch: expected=0x%08X, got=0x%08X",
+                  NIGHTFALL_MAGIC, hdr->magic);
         return -1;
     }
 
@@ -142,7 +147,7 @@ int protocol_unpack_checkin(const uint8_t *buf, size_t len,
                             uint64_t *session_id, char *hostname,
                             uint32_t *hostname_len) {
     if (len < 12) {
-        LOG_ERROR("Unpack_checkin: body too short: %zu", len);
+        LOG_ERROR("unpack_checkin: body too short: %zu", len);
         return -1; // minimum: 8 (session_id) + 4 (hostname_len)
     }
     size_t off = 0;
@@ -159,7 +164,7 @@ int protocol_unpack_checkin(const uint8_t *buf, size_t len,
     off += 4;
     *hostname_len = ntohl(*hostname_len);
     if (len < 12 + *hostname_len) {
-        LOG_ERROR("Unpack_checkin: body too short for hostname: %zu < %u", len,
+        LOG_ERROR("unpack_checkin: body too short for hostname: %zu < %u", len,
                   12 + *hostname_len);
         return -1;
     }
@@ -167,7 +172,7 @@ int protocol_unpack_checkin(const uint8_t *buf, size_t len,
     memcpy(hostname, buf + off, *hostname_len);
     off += *hostname_len;
 
-    LOG_DEBUG("Unpack_checkin: session_id=%llu, hostname_len=%u, hostname=%s",
+    LOG_DEBUG("unpack_checkin: session_id=%llu, hostname_len=%u, hostname=%s",
               (unsigned long long)*session_id, *hostname_len, hostname);
 
     return 0;
@@ -176,7 +181,7 @@ int protocol_unpack_checkin(const uint8_t *buf, size_t len,
 int protocol_unpack_checkin_ack(const uint8_t *buf, size_t len,
                                 uint32_t *task_count) {
     if (len < 4) {
-        LOG_ERROR("Unpack_checking_ack: body too short: %zu", len);
+        LOG_ERROR("unpack_checking_ack: body too short: %zu", len);
         return -1;
     }
     size_t off = 0;
@@ -185,7 +190,7 @@ int protocol_unpack_checkin_ack(const uint8_t *buf, size_t len,
 
     *task_count = ntohl(*task_count);
 
-    LOG_DEBUG("Unpack_checkin_ack: task_count=%u", *task_count);
+    LOG_DEBUG("unpack_checkin_ack: task_count=%u", *task_count);
 
     return 0;
 }
@@ -193,7 +198,7 @@ int protocol_unpack_checkin_ack(const uint8_t *buf, size_t len,
 int protocol_unpack_task(const uint8_t *buf, size_t len, task_type_t *type,
                          char *args, uint32_t *args_len) {
     if (len < 8) {
-        LOG_ERROR("Unpack_task: body too short: %zu", len);
+        LOG_ERROR("unpack_task: body too short: %zu", len);
         return -1;
     }
     size_t off = 0;
@@ -211,13 +216,13 @@ int protocol_unpack_task(const uint8_t *buf, size_t len, task_type_t *type,
     *args_len = ntohl(*args_len);
 
     if (8 + *args_len > len) { // Bytes we need > bytes we have
-        LOG_ERROR("Unpack_task: body too short for args: %zu < %u", len,
+        LOG_ERROR("unpack_task: body too short for args: %zu < %u", len,
                   8 + *args_len);
         return -1;
     }
     memcpy(args, buf + off, *args_len);
 
-    LOG_DEBUG("Unpack_task: type=%s(%d) args_len=%u args=%s",
+    LOG_DEBUG("unpack_task: type=%s(%d), args_len=%u, args=%s",
               task_type_str(*type), (int)*type, *args_len, args);
 
     return 0;
@@ -227,7 +232,7 @@ int protocol_unpack_result(const uint8_t *buf, size_t len, task_type_t *type,
                            int32_t *status, uint8_t *data, uint32_t *data_len) {
     //
     if (len < 12) {
-        LOG_ERROR("Unpack_result: body too short: %zu", len);
+        LOG_ERROR("unpack_result: body too short: %zu", len);
         return -1;
     }
 
@@ -248,14 +253,14 @@ int protocol_unpack_result(const uint8_t *buf, size_t len, task_type_t *type,
     *data_len = ntohl(*data_len);
 
     if (*data_len + 12 > len) {
-        LOG_ERROR("Unpack_result: body too short for data: %zu < %u", len,
+        LOG_ERROR("unpack_result: body too short for data: %zu < %u", len,
                   12 + *data_len);
         return -1;
     }
 
     memcpy(data, buf + off, *data_len);
 
-    LOG_DEBUG("Unpack_result: type=%s(%d) status=%d data_len=%u",
+    LOG_DEBUG("unpack_result: type=%s(%d), status=%d, data_len=%u",
               task_type_str(*type), (int)*type, *status, *data_len);
 
     return 0;
@@ -274,7 +279,6 @@ bool protocol_try_parse(recv_buf_t *rbuf, msg_header_t *out_hdr,
 
     // Get header
     if (protocol_unpack_header(rbuf->buf, out_hdr) < 0) {
-        LOG_ERROR("try_parse: header unpack failed (bad magic?)");
         return false;
     }
 
