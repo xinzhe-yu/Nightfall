@@ -260,3 +260,40 @@ int protocol_unpack_result(const uint8_t *buf, size_t len, task_type_t *type,
 
     return 0;
 }
+
+// ── TCP reassembly ─────────────────────────────────────────────
+bool protocol_try_parse(recv_buf_t *rbuf, msg_header_t *out_hdr,
+                        const uint8_t **out_body, uint32_t *out_body_len) {
+
+    // Check if rbuf is more than header size
+    if (rbuf->len < NIGHTFALL_HDR_SIZE) {
+        LOG_DEBUG("try_parse: need %d bytes, have %zu", NIGHTFALL_HDR_SIZE,
+                  rbuf->len);
+        return false;
+    }
+
+    // Get header
+    if (protocol_unpack_header(rbuf->buf, out_hdr) < 0) {
+        LOG_ERROR("try_parse: header unpack failed (bad magic?)");
+        return false;
+    }
+
+    size_t msg_size = NIGHTFALL_HDR_SIZE + out_hdr->body_len;
+
+    // Check if rbuf is more than header + body
+    if (rbuf->len < msg_size) {
+        LOG_DEBUG("try_parse: incomplete msg, need %zu have %zu", msg_size,
+                  rbuf->len);
+        return false;
+    }
+
+    // Point body to start of body
+    *out_body = rbuf->buf + NIGHTFALL_HDR_SIZE;
+    // Point len to hdr struct
+    *out_body_len = out_hdr->body_len;
+
+    memmove(rbuf->buf, rbuf->buf + msg_size, rbuf->len - msg_size);
+    rbuf->len -= msg_size;
+
+    return true;
+}
