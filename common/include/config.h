@@ -10,7 +10,7 @@
 #define NIGHTFALL_HDR_SIZE 12
 
 // Maximum total message size (header + body).
-#define MAX_MSG_SIZE (64 * 1024)
+#define MAX_MSG_SIZE (64 * 1024) // Growing this stack overflow risk 
 
 // Maximum concurrent sessions the server tracks.
 #define MAX_SESSIONS 1024

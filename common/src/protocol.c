@@ -171,6 +171,7 @@ int protocol_unpack_checkin(const uint8_t *buf, size_t len,
 
     memcpy(hostname, buf + off, *hostname_len);
     off += *hostname_len;
+    hostname[*hostname_len] = '\0';
 
     LOG_DEBUG("unpack_checkin: session_id=%llu, hostname_len=%u, hostname=%s",
               (unsigned long long)*session_id, *hostname_len, hostname);
@@ -221,6 +222,7 @@ int protocol_unpack_task(const uint8_t *buf, size_t len, task_type_t *type,
         return -1;
     }
     memcpy(args, buf + off, *args_len);
+    args[*args_len] = '\0';
 
     LOG_DEBUG("unpack_task: type=%s(%d), args_len=%u, args=%s",
               task_type_str(*type), (int)*type, *args_len, args);
@@ -244,9 +246,11 @@ int protocol_unpack_result(const uint8_t *buf, size_t len, task_type_t *type,
     raw_type = ntohl(raw_type);
     *type = (task_type_t)raw_type;
 
-    memcpy(status, buf + off, 4);
+    uint32_t temp;
+    memcpy(&temp, buf + off, 4);
     off += 4;
-    *status = (int32_t)ntohl(*status);
+    temp = ntohl(temp);
+    memcpy(status, &temp, sizeof(*status));
 
     memcpy(data_len, buf + off, 4);
     off += 4;
