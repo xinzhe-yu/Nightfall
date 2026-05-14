@@ -3,6 +3,7 @@
 #include "logging.h"
 #include "protocol.h"
 
+#include "session.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -17,7 +18,7 @@
 typedef struct {
     int fd;
     recv_buf_t rbuf;
-    uint64_t session_id;
+    session_t *session;
 } client_t;
 
 static struct {
@@ -120,7 +121,6 @@ int listener_init(uint16_t port) {
 
 // Find free slot and init new client
 static void handle_accept(void) {
-
     while (1) {
         int new_fd = accept(state.listen_fd, NULL, NULL);
         if (new_fd < 0) {
@@ -134,7 +134,6 @@ static void handle_accept(void) {
         set_nonblocking(new_fd);
 
         // Find a free slot in state.clients (fd == -1)
-
         int free_slot = -1;
         for (int i = 0; i < MAX_SESSIONS; i++) {
             if (state.clients[i].fd == -1) {
@@ -153,7 +152,7 @@ static void handle_accept(void) {
         // Init slot
         state.clients[free_slot].fd = new_fd;
         recv_buf_reset(&state.clients[free_slot].rbuf);
-        state.clients[free_slot].session_id = 0;
+        state.clients[free_slot].session = NULL;
 
         struct epoll_event ev;
         ev.events = EPOLLIN;
@@ -171,13 +170,20 @@ static void handle_client_data(client_t *c) {
 
     // if recv returns 0; clean disconnect
     if (n == 0) {
-        LOG_INFO("client disconnected fd=%d session=%llu", c->fd,
-                 (unsigned long long)c->session_id);
+        if (c->session) {
+            LOG_INFO("client disconnected fd=%d session=%llu", c->fd,
+                     (unsigned long long)c->session->id);
+            c->session->state = SESSION_DISCONNECTED;
+        } else {
+            LOG_INFO("client disconnected before checkin fd=%d", c->fd);
+        }
         epoll_ctl(state.epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
         close(c->fd);
         c->fd = -1;
+        c->session = NULL;
         return;
     }
+
     if (n < 0) {
         if (errno == EAGAIN) {
             return;
@@ -207,10 +213,8 @@ static void handle_client_data(client_t *c) {
 static void handle_message(client_t *c, msg_header_t *hdr, const uint8_t *body, uint32_t body_len) {
     switch (hdr->msg_type) {
     case MSG_CHECKIN: {
-
-        // Output resd
         uint64_t session_id;
-        char hostname[256];
+        char hostname[MAX_HOSTNAME_LEN];
         uint32_t hostname_len;
 
         if (protocol_unpack_checkin(body, body_len, &session_id, hostname, &hostname_len) < 0) {
@@ -218,32 +222,59 @@ static void handle_message(client_t *c, msg_header_t *hdr, const uint8_t *body, 
             return;
         }
 
-        c->session_id = session_id;
-        LOG_INFO("checkin: session=%llu hostname=%s", (unsigned long long)session_id, hostname);
+        // Try to find existing session (reconnect case)
+        session_t *sess = session_find(session_id);
+        if (sess) {
+            // Reconnect — existing session checking back in
+            sess->state = SESSION_ACTIVE;
+            session_touch(sess);
+            LOG_INFO("session reconnected: id=%llu hostname=%s", (unsigned long long)session_id,
+                     sess->hostname);
+        } else {
+            // New session
+            sess = session_create(session_id, hostname);
+            if (!sess) {
+                LOG_ERROR("session_create failed for fd=%d (table full?)", c->fd);
+                // Disconnect the client — we can't track them
+                epoll_ctl(state.epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
+                close(c->fd);
+                c->fd = -1;
+                return;
+            }
+            sess->state = SESSION_ACTIVE;
+        }
 
-        // TODO; Session_lookup / session create
-        // TODO; pack checkin_ack + queued task, send back
+        // Link the connection to the session
+        c->session = sess;
+
+        // TODO: pack checkin_ack + queued task, send back
         break;
     }
     case MSG_RESULT: {
-
-        // Output resd
         task_type_t type;
         int32_t status;
-        uint8_t data[MAX_MSG_SIZE]; // 64KB on stack
+        uint8_t data[MAX_MSG_SIZE];
         uint32_t data_len;
 
         if (protocol_unpack_result(body, body_len, &type, &status, data, &data_len) < 0) {
             LOG_ERROR("bad result from fd=%d", c->fd);
             return;
         }
-        // TODO: update task state to COMPLETED/FAILED
-        // TODO: display output to operator
+
+        if (c->session) {
+            session_touch(c->session);
+        }
+
+        // TODO: update task state, display to operator
         break;
     }
     case MSG_HEARTBEAT: {
-        LOG_DEBUG("heartbeat from session=%llu", (unsigned long long)c->session_id);
-        // TODO: update session last_seen
+        if (c->session) {
+            session_touch(c->session);
+            LOG_DEBUG("heartbeat from session=%llu", (unsigned long long)c->session->id);
+        } else {
+            LOG_WARN("heartbeat before checkin from fd=%d", c->fd);
+        }
         break;
     }
     default: {

@@ -14,7 +14,7 @@
 
 # --- Compiler Configuration ---
 CC       = gcc
-CFLAGS   = -Wall -Wextra -Werror -pedantic -std=c11
+CFLAGS   = -Wall -Wextra -Werror -pedantic -std=c2x
 
 # --- Directory Layout ---
 # Build artifacts go in build/ so your source tree stays clean.
@@ -35,17 +35,18 @@ IMPLANT_INCLUDES = -Iimplant/include $(COMMON_INCLUDES)
 # --- Source Files ---
 # Append new .c files here as you build them out.
 COMMON_SRC  = common/src/logging.c \
-              common/src/protocol.c
+              common/src/protocol.c \
+              common/src/types.c
 
 SERVER_SRC  = server/src/main.c \
               server/src/session.c \
               server/src/listener.c \
-              server/src/cli.c
+              # server/src/cli.c
 
 IMPLANT_SRC = implant/src/main.c \
-              implant/src/transport.c \
-              implant/src/tasking.c \
-              implant/src/beacon.c
+              # implant/src/transport.c \
+              # implant/src/tasking.c \
+              # implant/src/beacon.c
 
 # --- Object Files ---
 # We want .o files in build/, not next to sources.
