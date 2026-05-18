@@ -18,6 +18,10 @@ typedef struct {
     time_t created_at;
     time_t last_seen;
     bool in_use;
+
+    task_t tasks[MAX_TASKS_PER_SESSION];
+    int task_count;
+
 } session_t;
 
 // AllocaTe a new session in the table. Returns NULL if table is full

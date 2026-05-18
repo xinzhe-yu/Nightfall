@@ -41,6 +41,7 @@ COMMON_SRC  = common/src/logging.c \
 SERVER_SRC  = server/src/main.c \
               server/src/session.c \
               server/src/listener.c \
+              server/src/taskqueue.c \
               # server/src/cli.c
 
 IMPLANT_SRC = implant/src/main.c \

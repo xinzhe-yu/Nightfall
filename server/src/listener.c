@@ -169,13 +169,13 @@ static void handle_client_data(client_t *c) {
     ssize_t n = recv(c->fd, c->rbuf.buf + c->rbuf.len, MAX_MSG_SIZE - c->rbuf.len, 0);
 
     // if recv returns 0; clean disconnect
-    if (n == 0) {
+    if (n < 0) {
+        if (errno == EAGAIN) {
+            return;
+        }
+        LOG_ERROR("recv fd=%d: %s", c->fd, strerror(errno));
         if (c->session) {
-            LOG_INFO("client disconnected fd=%d session=%llu", c->fd,
-                     (unsigned long long)c->session->id);
             c->session->state = SESSION_DISCONNECTED;
-        } else {
-            LOG_INFO("client disconnected before checkin fd=%d", c->fd);
         }
         epoll_ctl(state.epoll_fd, EPOLL_CTL_DEL, c->fd, NULL);
         close(c->fd);

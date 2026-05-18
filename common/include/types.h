@@ -47,6 +47,15 @@ typedef enum {
     TASK_FAILED,    // Implant reported an error executing this task
 } task_state_t;
 
+// Per task struct
+typedef struct {
+    task_type_t type;
+    task_state_t state;
+    char args[MAX_TASK_ARGS];
+    uint32_t args_len;
+
+} task_t;
+
 // Used for logging
 // converts enum value to string
 const char *msg_type_str(msg_type_t t);
