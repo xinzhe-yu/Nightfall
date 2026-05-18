@@ -1,6 +1,7 @@
 #ifndef TYPES_H
 #define TYPES_H
 
+#include "config.h"
 #include <stdint.h>
 
 // Message types - Identify what kind of protocol message this is

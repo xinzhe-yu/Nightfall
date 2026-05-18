@@ -16,10 +16,10 @@
 #define MAX_SESSIONS 1024
 
 // How many tasks can be queued per session.
-#define MAX_TASKS_PER_SESSION 16
+#define MAX_TASKS_PER_SESSION 4
 
 // Maximum length of task argument string.
-#define MAX_TASK_ARGS 4096
+#define MAX_TASK_ARGS 1024
 
 // Default beacon sleep interval in seconds.
 #define DEFAULT_SLEEP_SEC 5 // longer in real senario
