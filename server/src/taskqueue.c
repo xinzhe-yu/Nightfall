@@ -1,5 +1,6 @@
 #include "taskqueue.h"
 #include "types.h"
+#include <string.h>
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
@@ -12,10 +13,12 @@ int taskqueue_enqueue(session_t *sess, task_type_t type, const char *args, uint3
     task_t *task = &sess->tasks[sess->task_count];
     task->type = type;
     task->state = TASK_QUEUED;
-    memcpy(task->args, args, sizeof(args));
+    memcpy(task->args, args, args_len);
     task->args_len = args_len;
     sess->task_count++;
     // LOG
+
+    return 0;
 }
 
 int taskqueue_pop(session_t *sess, task_t out[], int max) {
